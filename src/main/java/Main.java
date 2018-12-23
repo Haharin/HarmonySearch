@@ -1,31 +1,31 @@
-import java.util.Arrays;
-import java.util.Random;
-import java.util.Scanner;
+import org.omg.CORBA.INTERNAL;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.time.LocalDateTime;
+import java.util.*;
 
 public class Main
 {
     private static Random generator = new Random();
     private static boolean biggerIsBetter = false;
-    public static void main(String[] args) {
-        //test
-        Double[] test = {2.2029, 1.5707, 1.285, 1.9231, 1.7205};
-        System.out.println(fitnessFunction(test));
-        System.out.println(test.length);
-        Double[] test2 = {1.9256, 1.5521};
-        System.out.println(fitnessFunction(test2));
-        System.out.println(test2.length);
-        //test end
+    public static void main(String[] args) throws IOException {
         Scanner in = new Scanner(System.in);
+        System.out.print("worst criteria (0) average criteria (1): ");
+        int criteria = in.nextInt();
         System.out.print("Harmony Memory Size: ");
         int HMS = in.nextInt();
         System.out.print("Dimension for evaluate: ");
         int dimensions = in.nextInt();
-        System.out.print("minimum: ");
-        int randMin = in.nextInt();
-        System.out.print("maximum: ");
-        int randMax = in.nextInt();
+//        System.out.print("minimum: ");
+//        double randMin = in.nextDouble();
+        double randMin = -Math.PI;
+//        System.out.print("maximum: ");
+//        double randMax = in.nextDouble();
+        double randMax = Math.PI;
         System.out.print("shift value: ");
-        int shiftValue = in.nextInt();
+        double shiftValue = in.nextDouble();
         Double[][] harmonyMemory = new Double[HMS][dimensions];
 
 
@@ -36,37 +36,119 @@ public class Main
             }
         }
 
-        System.out.print("Number of iterations: ");
+        System.out.print("Maximum number of iterations: ");
         long numberOfIterations = in.nextLong();
+        System.out.print("Maximum number of repetitions: ");
+        long maxNumberOfRepetions = in.nextLong();
         System.out.print("HMCR: ");
         double HMCR = in.nextDouble();
         System.out.print("mutation rate: ");
         double mutationRate = in.nextDouble();
+        System.out.print("fix the maximum number of possibles parents? (1 yes, 0 no): ");
+        List<Integer> usedParents;
+        Integer[] selectedParents = null;
+        if (in.nextInt() == 1){
+            System.out.print("number of maximum possibles parents: ");
+            int numberOfParents = in.nextInt();
+            selectedParents = new Integer[numberOfParents];
+        };
         long iterations = 0;
         Double[] newHarmony = new Double[dimensions];
-        while (iterations < numberOfIterations){
-            for (int j = 0; j < dimensions; j++){
-                if ( generator.nextDouble() < HMCR){
-                    newHarmony[j] = harmonyMemory[generator.nextInt(HMS)][j];
-                    if ( generator.nextDouble() < mutationRate){
-                        newHarmony[j] = newHarmony[j] + getRandomInRange(-shiftValue, shiftValue);
+        String fileName = criteria + "_" +
+                HMS + "_" +
+                dimensions + "_" +
+                "-PI" + "_" +
+                "+PI" + "_" +
+                shiftValue + "_" +
+                numberOfIterations + "_" +
+                maxNumberOfRepetions + "_" +
+                HMCR + "_" +
+                mutationRate + "_" +
+                LocalDateTime.now().toString().replace(':', '-');
+        File file = new File("fitnessValue" + fileName);
+        File file2 = new File("xValues" + fileName);
+
+        file.createNewFile();
+        file2.createNewFile();
+        FileWriter writer = new FileWriter(file);
+        FileWriter writer2 = new FileWriter(file2);
+
+        long numberOfRepetitions = 0;
+        double previousValue = 0.0;
+        while (iterations < numberOfIterations && numberOfRepetitions < maxNumberOfRepetions){
+            usedParents = new ArrayList<Integer>();
+            if(selectedParents != null){
+                for(int i = 0; i < selectedParents.length; i++){
+                    Integer selected = generator.nextInt(HMS);
+                    boolean contains = false;
+                    for (Integer selectedParent : selectedParents) {
+                        if (selectedParent == selected){
+                            contains = true;
+                        }
+                    }
+                    if (contains){
+                        i--;
+                    }
+                    else {
+                        selectedParents[i] = selected;
                     }
                 }
-                else{
-                    newHarmony[j] = getRandomInRange(randMin, randMax);
+                for (int j = 0; j < dimensions; j++){
+                    if ( generator.nextDouble() < HMCR ){
+                        usedParents.add(getRandomFromSelectedParents(selectedParents, usedParents, dimensions - j));
+                        newHarmony[j] = harmonyMemory[usedParents.get(usedParents.size() - 1)][j];
+                        if ( generator.nextDouble() < mutationRate){
+                            newHarmony[j] = mutate(newHarmony[j], shiftValue, randMin, randMax);
+//                            newHarmony[j] = newHarmony[j] + getRandomInRange(-shiftValue, shiftValue);
+                        }
+                    }
+                    else{
+                        newHarmony[j] = getRandomInRange(randMin, randMax);
+                        usedParents.add(-1);
+                    }
+                }
+            }
+            else{
+                for (int j = 0; j < dimensions; j++){
+                    if ( generator.nextDouble() < HMCR){
+                        usedParents.add(generator.nextInt(HMS));
+                        newHarmony[j] = harmonyMemory[usedParents.get(usedParents.size() - 1)][j];
+                        if ( generator.nextDouble() < mutationRate){
+                            newHarmony[j] = mutate(newHarmony[j], shiftValue, randMin, randMax);
+//                            newHarmony[j] = newHarmony[j] + getRandomInRange(-shiftValue, shiftValue);
+                        }
+                    }
+                    else{
+                        newHarmony[j] = getRandomInRange(randMin, randMax);
+                    }
                 }
             }
             int worstIndex = getWortsMember(harmonyMemory);
-            double worstValue = fitnessFunction(
-                    harmonyMemory[worstIndex]);
-            if (!firstBetter(worstValue, fitnessFunction(newHarmony))){
+            double enoughToReplace;
+            if (criteria == 0){
+                enoughToReplace = fitnessFunction(harmonyMemory[worstIndex]);
+            }
+            else {
+                enoughToReplace = getAverageFitness(harmonyMemory);
+            }
+
+            if (!isFirstBetter(enoughToReplace, fitnessFunction(newHarmony))){
                 System.arraycopy(newHarmony, 0, harmonyMemory[worstIndex], 0, dimensions);
             }
-            fitnessFunction(harmonyMemory[0]);
-            if (iterations % 1000 == 0){
-                int bestIndex = getBestMember(harmonyMemory);
-                double bestValue = fitnessFunction(harmonyMemory[bestIndex]);
+            int bestIndex = getBestMember(harmonyMemory);
+            double bestValue = fitnessFunction(harmonyMemory[bestIndex]);
+            writer.write(iterations + ", " + bestValue + "\n");
+            writer2.write(iterations + ", " + Arrays.toString(harmonyMemory[bestIndex]) + "\n");
+            if (bestValue == previousValue){
+                numberOfRepetitions++;
+            }
+            else{
+                numberOfRepetitions = 0;
+                previousValue = bestValue;
+            }
+            if (iterations % 100 == 0){
                 System.out.println(Arrays.toString(harmonyMemory[bestIndex]));
+                System.out.println(usedParents);
                 System.out.println(bestValue);
             }
             iterations++;
@@ -75,10 +157,14 @@ public class Main
         double bestValue = fitnessFunction(harmonyMemory[bestIndex]);
         System.out.println(Arrays.toString(harmonyMemory[bestIndex]));
         System.out.println(bestValue);
+        writer.flush();
+        writer.close();
+        writer2.flush();
+        writer2.close();
     }
 
-    private static double getRandomInRange(Integer min, Integer max){
-        return min + generator.nextDouble() * (max - min + 1);
+    private static double getRandomInRange(Double min, Double max){
+        return min + generator.nextDouble() * (max - min);
     }
 
     private static double fitnessFunction(Double[] vector){
@@ -96,7 +182,7 @@ public class Main
         int n = 0;
         for (int i = 1; i < memory.length; i++){
             double current = fitnessFunction(memory[i]);
-            if(!firstBetter(current, worst)){
+            if(!isFirstBetter(current, worst)){
                 worst = current;
                 n = i;
             }
@@ -109,7 +195,7 @@ public class Main
         int n = 0;
         for (int i = 1; i < memory.length; i++){
             double current = fitnessFunction(memory[i]);
-            if(firstBetter(current, best)){
+            if(isFirstBetter(current, best)){
                 best = current;
                 n = i;
             }
@@ -117,12 +203,44 @@ public class Main
         return n;
     }
 
-    private static boolean firstBetter(Double first, Double second){
+    private static double getAverageFitness(Double[][] memory){
+        double summ = 0;
+        for (int i = 0; i < memory.length; i++){
+            summ += fitnessFunction(memory[0]);
+        }
+        return summ / memory.length;
+    }
+
+    private static boolean isFirstBetter(Double first, Double second){
         if (biggerIsBetter){
             return first >= second;
         }
         else{
             return first <= second;
+        }
+    }
+
+    private static double mutate (double value, double shift, double min, double max){
+        double newValue = value + getRandomInRange(-shift, shift);
+        if (newValue < min || newValue > max){
+            return  mutate(value, shift, min, max);
+        }
+        else {
+            return newValue;
+        }
+    }
+
+    private static Integer getRandomFromSelectedParents(Integer[] selectedParents, List<Integer> usedParents, int remain){
+        Integer selected = selectedParents[generator.nextInt(selectedParents.length)];
+        if (remain <= selectedParents.length - usedParents.size()){
+            if (usedParents.contains(selected)){
+                selected = getRandomFromSelectedParents(selectedParents, usedParents, remain);
+                return selected;
+            }
+            return selected;
+        }
+        else {
+            return selected;
         }
     }
 }
