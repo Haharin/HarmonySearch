@@ -46,6 +46,7 @@ public class Main
         double mutationRate = in.nextDouble();
         System.out.print("fix the maximum number of possibles parents? (1 yes, 0 no): ");
         List<Integer> usedParents;
+        List<Integer> displayVectorGeneration;
         Integer[] selectedParents = null;
         if (in.nextInt() == 1){
             System.out.print("number of maximum possibles parents: ");
@@ -65,8 +66,8 @@ public class Main
                 HMCR + "_" +
                 mutationRate + "_" +
                 LocalDateTime.now().toString().replace(':', '-');
-        File file = new File("fitnessValue" + fileName);
-        File file2 = new File("xValues" + fileName);
+        File file = new File("results/fitnessValue" + fileName + ".csv");
+        File file2 = new File("results/xValues" + fileName + ".csv");
 
         file.createNewFile();
         file2.createNewFile();
@@ -77,6 +78,7 @@ public class Main
         double previousValue = 0.0;
         while (iterations < numberOfIterations && numberOfRepetitions < maxNumberOfRepetions){
             usedParents = new ArrayList<Integer>();
+            displayVectorGeneration = new ArrayList<Integer>();
             if(selectedParents != null){
                 for(int i = 0; i < selectedParents.length; i++){
                     Integer selected = generator.nextInt(HMS);
@@ -96,6 +98,7 @@ public class Main
                 for (int j = 0; j < dimensions; j++){
                     if ( generator.nextDouble() < HMCR ){
                         usedParents.add(getRandomFromSelectedParents(selectedParents, usedParents, dimensions - j));
+                        displayVectorGeneration.add(usedParents.get(usedParents.size() - 1));
                         newHarmony[j] = harmonyMemory[usedParents.get(usedParents.size() - 1)][j];
                         if ( generator.nextDouble() < mutationRate){
                             newHarmony[j] = mutate(newHarmony[j], shiftValue, randMin, randMax);
@@ -104,7 +107,8 @@ public class Main
                     }
                     else{
                         newHarmony[j] = getRandomInRange(randMin, randMax);
-                        usedParents.add(-1);
+//                        usedParents.add(-1);
+                        displayVectorGeneration.add(-1);
                     }
                 }
             }
@@ -120,6 +124,8 @@ public class Main
                     }
                     else{
                         newHarmony[j] = getRandomInRange(randMin, randMax);
+//                        usedParents.add(-1);
+                        displayVectorGeneration.add(-1);
                     }
                 }
             }
@@ -136,9 +142,9 @@ public class Main
                 System.arraycopy(newHarmony, 0, harmonyMemory[worstIndex], 0, dimensions);
             }
             int bestIndex = getBestMember(harmonyMemory);
-            double bestValue = fitnessFunction(harmonyMemory[bestIndex]);
-            writer.write(iterations + ", " + bestValue + "\n");
-            writer2.write(iterations + ", " + Arrays.toString(harmonyMemory[bestIndex]) + "\n");
+            Double bestValue = fitnessFunction(harmonyMemory[bestIndex]);
+            writer.write((iterations + 1) + "; " + bestValue.toString().replace('.', ',') + "\n");
+            writer2.write((iterations + 1) + "; " + Arrays.toString(harmonyMemory[bestIndex]) + "\n");
             if (bestValue == previousValue){
                 numberOfRepetitions++;
             }
@@ -149,6 +155,7 @@ public class Main
             if (iterations % 100 == 0){
                 System.out.println(Arrays.toString(harmonyMemory[bestIndex]));
                 System.out.println(usedParents);
+                System.out.println(displayVectorGeneration);
                 System.out.println(bestValue);
             }
             iterations++;
@@ -232,7 +239,8 @@ public class Main
 
     private static Integer getRandomFromSelectedParents(Integer[] selectedParents, List<Integer> usedParents, int remain){
         Integer selected = selectedParents[generator.nextInt(selectedParents.length)];
-        if (remain <= selectedParents.length - usedParents.size()){
+        Set<Integer> temp = new LinkedHashSet<>(usedParents);
+        if (remain <= selectedParents.length - temp.size() ){
             if (usedParents.contains(selected)){
                 selected = getRandomFromSelectedParents(selectedParents, usedParents, remain);
                 return selected;
